@@ -151,53 +151,52 @@ class Model(Object):
         Gene, and Reaction objects are created anew but in a faster fashion
         than deepcopy
         """
-        return deepcopy(self)  # TODO: fix the hack below
-        # new = self.__class__()
-        # do_not_copy = {"metabolites", "reactions", "genes"}
-        # for attr in self.__dict__:
-        #     if attr not in do_not_copy:
-        #         new.__dict__[attr] = self.__dict__[attr]
-        #
-        # new.metabolites = DictList()
-        # do_not_copy = {"_reaction", "_model"}
-        # for metabolite in self.metabolites:
-        #     new_met = metabolite.__class__()
-        #     for attr, value in iteritems(metabolite.__dict__):
-        #         if attr not in do_not_copy:
-        #             new_met.__dict__[attr] = copy(
-        #                 value) if attr == "formula" else value
-        #     new_met._model = new
-        #     new.metabolites.append(new_met)
-        #
-        # new.genes = DictList()
-        # for gene in self.genes:
-        #     new_gene = gene.__class__(None)
-        #     for attr, value in iteritems(gene.__dict__):
-        #         if attr not in do_not_copy:
-        #             new_gene.__dict__[attr] = copy(
-        #                 value) if attr == "formula" else value
-        #     new_gene._model = new
-        #     new.genes.append(new_gene)
-        #
-        # new.reactions = DictList()
-        # do_not_copy = {"_model", "_metabolites", "_genes"}
-        # for reaction in self.reactions:
-        #     new_reaction = reaction.__class__()
-        #     for attr, value in iteritems(reaction.__dict__):
-        #         if attr not in do_not_copy:
-        #             new_reaction.__dict__[attr] = value
-        #     new_reaction._model = new
-        #     new.reactions.append(new_reaction)
-        #     # update awareness
-        #     for metabolite, stoic in iteritems(reaction._metabolites):
-        #         new_met = new.metabolites.get_by_id(metabolite.id)
-        #         new_reaction._metabolites[new_met] = stoic
-        #         new_met._reaction.add(new_reaction)
-        #     for gene in reaction._genes:
-        #         new_gene = new.genes.get_by_id(gene.id)
-        #         new_reaction._genes.add(new_gene)
-        #         new_gene._reaction.add(new_reaction)
-        # return new
+        new = self.__class__()
+        do_not_copy = {"metabolites", "reactions", "genes"}
+        for attr in self.__dict__:
+            if attr not in do_not_copy:
+                new.__dict__[attr] = self.__dict__[attr]
+
+        new.metabolites = DictList()
+        do_not_copy = {"_reaction", "_model"}
+        for metabolite in self.metabolites:
+            new_met = metabolite.__class__()
+            for attr, value in iteritems(metabolite.__dict__):
+                if attr not in do_not_copy:
+                    new_met.__dict__[attr] = copy(
+                        value) if attr == "formula" else value
+            new_met._model = new
+            new.metabolites.append(new_met)
+
+        new.genes = DictList()
+        for gene in self.genes:
+            new_gene = gene.__class__(None)
+            for attr, value in iteritems(gene.__dict__):
+                if attr not in do_not_copy:
+                    new_gene.__dict__[attr] = copy(
+                        value) if attr == "formula" else value
+            new_gene._model = new
+            new.genes.append(new_gene)
+
+        new.reactions = DictList()
+        do_not_copy = {"_model", "_metabolites", "_genes"}
+        for reaction in self.reactions:
+            new_reaction = reaction.__class__()
+            for attr, value in iteritems(reaction.__dict__):
+                if attr not in do_not_copy:
+                    new_reaction.__dict__[attr] = copy(value)
+            new_reaction._model = new
+            new.reactions.append(new_reaction)
+            # update awareness
+            for metabolite, stoic in iteritems(reaction._metabolites):
+                new_met = new.metabolites.get_by_id(metabolite.id)
+                new_reaction._metabolites[new_met] = stoic
+                new_met._reaction.add(new_reaction)
+            for gene in reaction._genes:
+                new_gene = new.genes.get_by_id(gene.id)
+                new_reaction._genes.add(new_gene)
+                new_gene._reaction.add(new_reaction)
+        return new
 
     def add_metabolites(self, metabolite_list):
         """Will add a list of metabolites to the the object, if they do not
@@ -518,11 +517,13 @@ class Model(Object):
 
         threshold: float
             tolerance for determining if a flux is zero (not printed)
+
         fva: int or None
             Whether or not to calculate and report flux variability in the
             output summary
-        round: int
-            number of digits after the decimal place to print
+
+        floatfmt: string
+            format method for floats, passed to tabulate. Default is '.3g'.
 
         """
 
@@ -530,7 +531,7 @@ class Model(Object):
             from ..flux_analysis.summary import model_summary
             return model_summary(self, **kwargs)
         except ImportError:
-            warn('Summary methods require pandas')
+            warn('Summary methods require pandas/tabulate')
 
     @property
     def medium(self):

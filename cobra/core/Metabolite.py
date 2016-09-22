@@ -28,10 +28,8 @@ class Metabolite(Species):
         name: str
             A human readable name.
 
-        compartment: None or a dictionary indicating the cellular location
-        of the metabolite.  Used when in a cobra.Reaction or Model
-        object
-
+        compartment: str or None
+            Compartment of metabolite.
         """
         Species.__init__(self, id, name)
         self.formula = formula
@@ -164,12 +162,15 @@ class Metabolite(Species):
             If given, fva should be a float between 0 and 1, representing the
             fraction of the optimum objective to be searched.
 
+        floatfmt: string
+            format method for floats, passed to tabulate. Default is '.3g'.
+
         """
         try:
             from ..flux_analysis.summary import metabolite_summary
             return metabolite_summary(self, **kwargs)
         except ImportError:
-            warn('Summary methods require pandas')
+            warn('Summary methods require pandas/tabulate')
 
 elements_and_molecular_weights = {
     'H':   1.007940,
