@@ -49,6 +49,7 @@ class Model(Object):
             self.__setstate__(id_or_model.__dict__)
             if not hasattr(self, "name"):
                 self.name = None
+            self._solver = id_or_model.solver
         else:
             Object.__init__(self, id_or_model, name=name)
             self._trimmed = False
@@ -64,10 +65,10 @@ class Model(Object):
 
             # from cameo ...
 
-        # if not hasattr(self, '_solver'):  # backwards compatibility with older cobrapy pickles?
-        self._solver = solver_interface.Model()
-        self._solver.objective = solver_interface.Objective(S.Zero)
-        self._populate_solver(self.reactions, self.metabolites)
+            # if not hasattr(self, '_solver'):  # backwards compatibility with older cobrapy pickles?
+            self._solver = solver_interface.Model()
+            self._solver.objective = solver_interface.Objective(S.Zero)
+            self._populate_solver(self.reactions, self.metabolites)
         self._timestamp_last_optimization = None
         self.solution = LazySolution(self)
 
@@ -151,52 +152,53 @@ class Model(Object):
         Gene, and Reaction objects are created anew but in a faster fashion
         than deepcopy
         """
-        new = self.__class__()
-        do_not_copy = {"metabolites", "reactions", "genes"}
-        for attr in self.__dict__:
-            if attr not in do_not_copy:
-                new.__dict__[attr] = self.__dict__[attr]
-
-        new.metabolites = DictList()
-        do_not_copy = {"_reaction", "_model"}
-        for metabolite in self.metabolites:
-            new_met = metabolite.__class__()
-            for attr, value in iteritems(metabolite.__dict__):
-                if attr not in do_not_copy:
-                    new_met.__dict__[attr] = copy(
-                        value) if attr == "formula" else value
-            new_met._model = new
-            new.metabolites.append(new_met)
-
-        new.genes = DictList()
-        for gene in self.genes:
-            new_gene = gene.__class__(None)
-            for attr, value in iteritems(gene.__dict__):
-                if attr not in do_not_copy:
-                    new_gene.__dict__[attr] = copy(
-                        value) if attr == "formula" else value
-            new_gene._model = new
-            new.genes.append(new_gene)
-
-        new.reactions = DictList()
-        do_not_copy = {"_model", "_metabolites", "_genes"}
-        for reaction in self.reactions:
-            new_reaction = reaction.__class__()
-            for attr, value in iteritems(reaction.__dict__):
-                if attr not in do_not_copy:
-                    new_reaction.__dict__[attr] = copy(value)
-            new_reaction._model = new
-            new.reactions.append(new_reaction)
-            # update awareness
-            for metabolite, stoic in iteritems(reaction._metabolites):
-                new_met = new.metabolites.get_by_id(metabolite.id)
-                new_reaction._metabolites[new_met] = stoic
-                new_met._reaction.add(new_reaction)
-            for gene in reaction._genes:
-                new_gene = new.genes.get_by_id(gene.id)
-                new_reaction._genes.add(new_gene)
-                new_gene._reaction.add(new_reaction)
-        return new
+        return deepcopy(self)
+        # new = self.__class__()
+        # do_not_copy = {"metabolites", "reactions", "genes"}
+        # for attr in self.__dict__:
+        #     if attr not in do_not_copy:
+        #         new.__dict__[attr] = self.__dict__[attr]
+        #
+        # new.metabolites = DictList()
+        # do_not_copy = {"_reaction", "_model"}
+        # for metabolite in self.metabolites:
+        #     new_met = metabolite.__class__()
+        #     for attr, value in iteritems(metabolite.__dict__):
+        #         if attr not in do_not_copy:
+        #             new_met.__dict__[attr] = copy(
+        #                 value) if attr == "formula" else value
+        #     new_met._model = new
+        #     new.metabolites.append(new_met)
+        #
+        # new.genes = DictList()
+        # for gene in self.genes:
+        #     new_gene = gene.__class__(None)
+        #     for attr, value in iteritems(gene.__dict__):
+        #         if attr not in do_not_copy:
+        #             new_gene.__dict__[attr] = copy(
+        #                 value) if attr == "formula" else value
+        #     new_gene._model = new
+        #     new.genes.append(new_gene)
+        #
+        # new.reactions = DictList()
+        # do_not_copy = {"_model", "_metabolites", "_genes"}
+        # for reaction in self.reactions:
+        #     new_reaction = reaction.__class__()
+        #     for attr, value in iteritems(reaction.__dict__):
+        #         if attr not in do_not_copy:
+        #             new_reaction.__dict__[attr] = copy(value)
+        #     new_reaction._model = new
+        #     new.reactions.append(new_reaction)
+        #     # update awareness
+        #     for metabolite, stoic in iteritems(reaction._metabolites):
+        #         new_met = new.metabolites.get_by_id(metabolite.id)
+        #         new_reaction._metabolites[new_met] = stoic
+        #         new_met._reaction.add(new_reaction)
+        #     for gene in reaction._genes:
+        #         new_gene = new.genes.get_by_id(gene.id)
+        #         new_reaction._genes.add(new_gene)
+        #         new_gene._reaction.add(new_reaction)
+        # return new
 
     def add_metabolites(self, metabolite_list):
         """Will add a list of metabolites to the the object, if they do not
@@ -395,10 +397,10 @@ class Model(Object):
             # from cameo ...
             self._timestamp_last_optimization = time.time()
             if objective_sense is not None:
-                original_direction = self.objective.direction
-                self.objective.direction = {'minimize': 'min', 'maximize': 'max'}[objective_sense]
+                original_direction = self.solver.objective.direction
+                self.solver.objective.direction = {'minimize': 'min', 'maximize': 'max'}[objective_sense]
                 self.solver.optimize()
-                self.objective.direction = original_direction
+                self.solver.objective.direction = original_direction
             else:
                 self.solver.optimize()
             solution = solution_type(self)
@@ -481,14 +483,18 @@ class Model(Object):
 
     def change_objective(self, objectives):
         """Change the model objective"""
-        self.objective = objectives
+        self.solver.objective = objectives
 
     # from cameo ...
 
     @property
     def objective(self):
         """The model objective."""
-        return self.solver.objective
+        # TODO: the following should check if the model objective actually contains only reactions
+        return {reaction: reaction.objective_coefficient
+                for reaction in self.reactions
+                if reaction.objective_coefficient != 0}
+
 
     @objective.setter
     def objective(self, value):
